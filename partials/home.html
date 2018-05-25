@@ -1,0 +1,89 @@
+<div 
+    ng-controller="HomeController"
+    class="home-background">
+    
+    <div class="edit-selection">
+
+        <div class="lymlive-logo">
+
+        </div>
+
+
+        <!-- <button ng-click="createBlank()" >Post to php</button> -->
+
+        <button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#createBlank">Blank Canvas</button>
+        <button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#blankBackground">Blank Canvas with background</button>
+        <button type="button" class="btn btn-info btn-lg" data-toggle="modal" data-target="#browseImages">Browse existing images</button>
+
+        <div id="createBlank" class="modal fade" role="dialog">
+            <div class="modal-dialog">
+                <!-- Modal content-->
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title">Create Blank Canvas</h4>
+                    </div>
+                    <div class="modal-body">
+                        <p>Please enter canvas details.</p>
+                        <label for="canvasId">Project Name</label> <input id="canvasId" type="text" >
+                        <div 
+                            style="margin: 15px;">
+                            <label for="cbcw">Width</label> <input id="cbcw" type="number" >
+                            <label for="cbch">Height</label> <input id="cbch" type="number" >
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button 
+                            ng-click="createBlank()"
+                            type="button" 
+                            class="btn btn-success">Create</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div id="blankBackground" class="modal fade" role="dialog">
+                <div class="modal-dialog">
+                    <!-- Modal content-->
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <h4 class="modal-title">Create Blank Canvas with Background</h4>
+                        </div>
+                        <div class="modal-body">
+                            <p>Search server for background images</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button 
+                                ng-click="createBlankWithBackground()"
+                                type="button" 
+                                class="btn btn-success">Create</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div id="browseImages" class="modal fade" role="dialog">
+                <div class="modal-dialog">
+                    <!-- Modal content-->
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <h4 class="modal-title">Browse Existing Images</h4>
+                        </div>
+                        <div class="modal-body">
+                            <p>Search server for existing images</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button 
+                                ng-click="browseExisiting()"                                    
+                                type="button" 
+                                class="btn btn-success">Edit</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    </div>
+</div>
