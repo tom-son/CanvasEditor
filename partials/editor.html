@@ -57,7 +57,15 @@
                                 ng-change="renderAll()">
                         </div>
                         <div class="row">
-                            opacity: <input type="number" ng-model="state.isActiveObject.opacity" ng-change="renderAll()">
+                            opacity: {{state.isActiveObject.opacity}}
+                            <input 
+                                id="scale" 
+                                ng-model="state.isActiveObject.opacity"
+                                type="range"
+                                max="1" 
+                                min="0" 
+                                step=".01"
+                                ng-change="renderAll()"/>                            
                         </div>
 
                         <div class="row">

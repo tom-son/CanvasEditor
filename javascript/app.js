@@ -39,6 +39,8 @@ function($scope, $http, $routeParams){
         canvas: new fabric.Canvas('canvas'),
         ghostCanvas: document.createElement('canvas'),
         isActiveObject: false,
+        // Keep track of id to use for objects. Must increment when used.
+        zIndex: 0,
         textString: "",
         fontSize: 44,
         font: "",
@@ -72,22 +74,6 @@ function($scope, $http, $routeParams){
             "heart-clipart.png",
             "https://www.shareicon.net/data/128x128/2017/04/04/882436_media_512x512.png"
         ],
-        scale: 1,
-        dragOk: false,
-        startX: 0,
-        startY: 0,
-        // Set to the item that was clicked otherwise -1.
-        clickedItem: -1,
-        resizePoint: -1,
-        resizerRadius: 10,
-        crop: -1,
-        imageUpdated: true,
-        // Text handler flag to only allow 1 text handler to exist
-        isTextHandlerOn: false,
-        // Layer change flag to allow mouseup know that something may have changed
-        // pop that changed item into history array for undo
-                                                                            // WARNING!@# make another array to keep all the changes to not polute layers
-        layerChanged: false,
 
         // Testing for route
         editType: $routeParams.editType,
@@ -475,7 +461,6 @@ function($scope, $http, $routeParams){
 
                 ctx.scale(scaleWidth, scaleHeight);
 
-                $scope.clearCanvas(layerCanvas);
                 ctx.save();
                 $scope.rotateCanvas(element, ctx);
 
@@ -500,20 +485,23 @@ function($scope, $http, $routeParams){
 
 
     $scope.addTextHandler = function(xpos, ypos) {
-        var ctx = document.getElementById('canvas').getContext('2d');
-        ctx.font = $scope.state.fontSize + "px " + $scope.state.font;
-
+        var canvas = $scope.state.canvas;
+        
         var text = new fabric.Text(
             $scope.state.textString, 
             { 
-                left: 100,
-                top: 100,
+                // Create own z-index property for object
+                zIndex: $scope.state.zIndex,
                 fontSize: $scope.state.fontSize,
-                fill: $scope.state.fontColor,
+                fill: $scope.state.fontColor
             }
         );
-        $scope.state.canvas.add(text);
 
+        $scope.state.idHelper++;
+
+        canvas.add(text);
+        canvas.centerObject(text);
+        canvas.moveTo(imgInstance, imgInstance.zIndex);
         $scope.state.historyLayers = [];
         $scope.paintLayers();
         $scope.setDefaultValues();
@@ -533,19 +521,19 @@ function($scope, $http, $routeParams){
             let image = new Image();
 
             image.onload = function() {
-                
+                var canvas = $scope.state.canvas;
                 // store image into layers.
-                var imgInstance = new fabric.Image(image, {
-                    left: 100,
-                    top: 100,
-                    angle: 0,
-                    opacity: 0.85
-                });
-                $scope.state.canvas.add(imgInstance);
-                
+                var imgInstance = new fabric.Image(image, 
+                    {
+                        // Create own z-index property for object
+                        zIndex: $scope.state.zIndex
+                    }
+                );
+                canvas.add(imgInstance);
+                canvas.centerObject(imgInstance);
+                canvas.moveTo(imgInstance, imgInstance.zIndex);
                 console.log($scope.state.layers);
                 $scope.state.historyLayers = [];
-                // $scope.paintCanvas();
                 $scope.paintLayers();
             
             };
@@ -585,15 +573,13 @@ function($scope, $http, $routeParams){
 
         var canvas = $scope.state.canvas;
         console.log(canvas.getActiveObject());
-        // canvas.remove(canvas.getActiveObject());
+        canvas.remove(canvas.getActiveObject());
 
-        $scope.paintCanvas();
         $scope.paintLayers();
     }
 
     $scope.selectLayer = function(layerIndex) {
         $scope.state.clickedItem = layerIndex;
-        $scope.paintCanvas();
         $scope.paintLayers();
     }
 
@@ -616,12 +602,17 @@ function($scope, $http, $routeParams){
         var canvas = $scope.state.canvas;
         canvas.renderAll();
     }
-    // Mouse click event handler to check if mouse click co-ord
-    // is within item co-ord in the config.
+
+
+
     $scope.mouseDown = function(event) {
         var canvas = $scope.state.canvas;
+        // if no object clicked, do nothing
+        if(!canvas.getActiveObject()) return;
+
         $scope.state.isActiveObject = canvas.getActiveObject();
         console.log($scope.state.isActiveObject);
+        $scope.updateZIndex(canvas.getActiveObject());
         $scope.$apply();
     }
 
@@ -653,7 +644,13 @@ function($scope, $http, $routeParams){
     }
 
 
-    // $scope.$apply();
+    $scope.updateZIndex = function(layer) {
+        var canvas = $scope.state.canvas;
+        // Increment before use to keep zindex unique
+        $scope.state.zIndex++;
+        layer.zIndex = $scope.state.zIndex;
+        canvas.moveTo(layer, layer.zIndex);
+    }
 
 }]);
 
