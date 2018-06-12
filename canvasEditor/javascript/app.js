@@ -17,7 +17,7 @@ editApp.config(['$routeProvider', function($routeProvider) {
         controller: 'mainController'
     })
     // Blank canvas with background
-    .when('/editor/:editType/', {
+    .when('/editor/:editType/canvasId', {
         templateUrl: 'partials/editor.html',
         controller: 'mainController'
     })
@@ -29,23 +29,40 @@ editApp.config(['$routeProvider', function($routeProvider) {
     .otherwise({redirectTo: '/home'});
 }]);
 
+// help link background image to mainController and HomeController
+editApp.service('service', function() {
+    this.globalBackgroundImage = null;
+
+    this.setGlobalBackgroundImage = function(base64) {
+        this.globalBackgroundImage = base64;
+    };
+
+    this.getGlobalBackgroundImage = function(base64) {
+        return this.globalBackgroundImage;
+    };
+
+});
 
 
 
 
-editApp.controller('mainController', ['$scope', '$http', '$routeParams',
-function($scope, $http, $routeParams){
+
+editApp.controller('mainController', ['$scope', '$http', '$routeParams', 'service',
+function($scope, $http, $routeParams, service){
     $scope.state = {
         canvas: new fabric.Canvas('canvas'),
         ghostCanvas: document.createElement('canvas'),
         isActiveObject: false,
+        zoomNumber: null,
         // Keep track of id to use for objects. Must increment when used.
         zIndex: 0,
         // Unique number to set zindex for objects
         // always incremented when used
         idHelper: 0,
+        cropBox: null,
+        cropObject: null,
         textString: "",
-        fontSize: 44,
+        fontSize: 54,
         font: "",
         fontColor: "",
         // gets fonts from loadFonts()
@@ -73,10 +90,9 @@ function($scope, $http, $routeParams){
         },
         layers: [],
         historyLayers: [],
-        clipArt: [
-            // "heart-clipart.png",
-            // "https://www.shareicon.net/data/128x128/2017/04/04/882436_media_512x512.png"
-        ],
+        historyIndex: -1,
+        historyPrev: null,
+        clipArt: [],
 
         // Testing for route
         editType: $routeParams.editType,
@@ -89,18 +105,18 @@ function($scope, $http, $routeParams){
         h: $routeParams.height
     };
 
+
     $scope.init = function() {
         $scope.loadClipArts();
         $scope.loadFonts();
+        $scope.state.zoomNumber = $scope.state.canvas.getZoom();
     }
 
     // Initialise canvas when editor.html view has finished loading.
     $scope.$on('$viewContentLoaded', function(event)
     { 
         console.log("Canvas init!");
-
         var canvas = $scope.state.canvas;
-        
         
         $scope.state.layers = canvas._objects;
 
@@ -112,18 +128,18 @@ function($scope, $http, $routeParams){
                 
                 canvas.setWidth($scope.state.w);
                 canvas.setHeight($scope.state.h);
-
                 $scope.state.layers = $scope.state.canvas._objects;
-
-                // $scope.uploadCanvas(canvas);
-
-               
+                $scope.uploadCanvas(canvas);
                 break;
 
             case "blankBackground":
                 // width and height of canvas base on background image
                 // set state w & h base on background image zoomHandler needs it!!   <--------
-                $scope.paintBackgroundImage($scope.state.backgroundImg);
+                console.log($scope.state.canvasId);
+                var globalBackground = service.getGlobalBackgroundImage();
+                canvas.setWidth(globalBackground.width);
+                canvas.setHeight(globalBackground.height);
+                $scope.paintBackgroundImage(globalBackground);
                 $scope.uploadCanvas($scope.state.canvas);
                 break;
 
@@ -131,6 +147,7 @@ function($scope, $http, $routeParams){
                 $scope.getJson($scope.state.canvasId);
                 break;
         }
+
     });
 
 
@@ -139,19 +156,21 @@ function($scope, $http, $routeParams){
         $http.get("/php/getClipArt.php").then(
             function(response) {
                 console.log("loadClipArts success! response", response.data);
-                    
+
                 var data = response.data;
-                
-                response.data.forEach(function(clipArtObject){
+
+                data.forEach(function(clipArtObject){
 
                     var img = new Image();
                     img.onload = function() {
-                        $scope.state.clipArt.push(img);
+                        $scope.state.clipArt.push({name: clipArtObject.name, base64:img});
+                        $scope.paintClipArtPreview(clipArtObject);
                     };
                     img.src = clipArtObject.base64;
 
                 });
                 // console.log($scope.state.clipArt);
+                
             },
             function(response) {
                 console.log("loadCanvas failed! response:", response);
@@ -244,7 +263,14 @@ function($scope, $http, $routeParams){
                             scaleX: element.scaleX,
                             scaleY: element.scaleY,
                             _element: element._element,
-                            _originalElement: element._originalElement
+                            _originalElement: element._originalElement,
+                            // for crop
+                            cropWidth: element.cropWidth,
+                            cropHeight: element.cropHeight,
+                            cropScaleX: element.cropScaleX,
+                            cropScaleY: element.cropScaleY,
+                            cropLeft: element.cropLeft,
+                            cropTop: element.cropTop
                         }, 
                         {}
                     ));
@@ -265,7 +291,7 @@ function($scope, $http, $routeParams){
                             zIndex: element.zIndex,
                             scaleX: element.scaleX,
                             scaleY: element.scaleY
-                        }, 
+                        },
                         {}
                     ));
                     break;
@@ -332,13 +358,27 @@ function($scope, $http, $routeParams){
         var canvas = $scope.state.canvas;
         var canvasConfig = data.canvasConfig;
 
-        
-
         $scope.state.idHelper = data.canvasConfig.idHelper;
         $scope.state.zIndex = data.canvasConfig.zIndex;
         $scope.state.fontsUsed = data.canvasConfig.fontsUsed;
+
+        // state.w and state.h needed for zoomHandler.
+        // Without it zoom won't work especially when
+        // you re-edit canvas.
+        $scope.state.w = canvasConfig.cWidth;
+        $scope.state.h = canvasConfig.cHeight;
+        
+
         canvas.setWidth(canvasConfig.cWidth);
         canvas.setHeight(canvasConfig.cHeight);
+
+
+
+        var image = new Image();
+        image.onload = function() {
+            $scope.paintBackgroundImage(image);
+        }
+        image.src = data.backgroundImage._element;
 
         $scope.addFontsUsed();
 
@@ -355,20 +395,57 @@ function($scope, $http, $routeParams){
 
 
                         // document.body.appendChild(image);
-                        $scope.paintElement(canvas, element);
+                        // $scope.paintElement(canvas, element);
                     // }
                     
                 }
                 image.src = element._element;
             } else if (element.type === "text") {
-                  $scope.paintElement(canvas, element);
+                //   $scope.paintElement(canvas, element);
             }
         });
+
+        setTimeout(function() {
+            $scope.paintCanvas(layers);
+           
+        }, 1000);
+        setTimeout(function() {
+            // $scope.cropObjects(layers);
+        }, 2000);
+        
 
         console.log("Loaded canvas with these objects",layers);
         // $scope.updateZindexs(layers);
 
     }
+
+    $scope.cropObjects = function(layers) {
+        layers.forEach(function(element) {
+
+            if(element.cropTop != undefined) {
+                console.log("cropping image");
+                
+                element.clipTo = function (ctx) {
+
+                    console.log("cropping image");
+
+                    ctx.rect(
+                        -(element.cropWidth/2) + element.cropLeft,
+                        -(element.cropHeight/2) + element.cropTop, 
+                        parseInt(element.cropWidth * element.cropScaleX), 
+                        parseInt(element.cropScaleY * element.cropHeight)
+                    );
+                }
+            }
+        });
+
+        $scope.renderAll();
+    }
+
+
+
+
+
 
 
     $scope.getCanvas64 = function() {
@@ -385,11 +462,17 @@ function($scope, $http, $routeParams){
 
     // background option to fill background to canvas if background is smaller
     $scope.backgroundFillCanvas = function(canvas, background) {
+        var center = deviceCanvas.getCenter();
+
         background.set({
-            width: canvas.width, 
-            height: canvas.height, 
-            originX: 'left', 
-            originY: 'top'    
+            scaleX:1,
+            scaleY:1,
+            top: canvas.top,
+            left: canvas.left,
+            //width: canvas.width, 
+            //height: canvas.height, 
+            originX: 'center', 
+            originY: 'center'    
         });
 
         canvas.setBackgroundImage(background, canvas.renderAll.bind(canvas));
@@ -484,19 +567,30 @@ function($scope, $http, $routeParams){
 
 
 
-    $scope.paintBackgroundImage = function() {
-        console.log($scope.state.backgroundImg);
+    $scope.paintBackgroundImage = function(image) {
         var canvas = $scope.state.canvas;
-        var image = $scope.state.backgroundImg;
         var img = new fabric.Image(image);
-        canvas.setBackgroundImage(img, function(img) {
-            img.set({
-                originX: 'center', 
+        // canvas.setBackgroundImage(img, function(img) {
+        //     img.set({
+        //         originX: 'center', 
+        //         originY: 'center'
+        //     });
+        //     // canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+        //     // canvas.centerObject(img);
+        //  });
+        //  canvas.centerObject(img);
+
+
+        var center = canvas.getCenter();
+        canvas.setBackgroundImage(img,
+            canvas.renderAll.bind(canvas), {
+                scaleX:1,
+                scaleY:1,
+                top: center.top,
+                left: center.left,
+                originX: 'center',
                 originY: 'center'
-            });
-            canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
-            canvas.centerObject(img);
-         });
+        });
          
     }
 
@@ -541,28 +635,11 @@ function($scope, $http, $routeParams){
                 var canvas = $scope.state.canvas;
                 var data = event.target.result;
                 // fabric.Image.fromURL(data, function(image) {
-                    var img = new fabric.Image(image);
-                    console.log(img);
+                    // var img = new fabric.Image(image);
+                    console.log(image);
                     
-                    
-                    
-                    canvas.setBackgroundImage(img, function(img) {
-                        img.set({
-                            // Needed to position backgroundImage at 0/0
-                            width: canvas.getWidth(),//Number(canvas.width),
-                            height: canvas.getHeight(),//Number(canvas.height),
-                            // Needed to position backgroundImage at 0/0
-                            // originX: 'left',
-                            // originY: 'top'
-                        });
-                        canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
-                        canvas.centerObject(img);
-                     });
-                     
-                    
-                    console.log(img);
-                    // $scope.backgroundFillCanvas(canvas, f_img);
-                    // canvas.setBackgroundImage(f_img);
+                    $scope.paintBackgroundImage(image);
+
                     canvas.renderAll();
             }
             // console.log("image.src = ", event.target.result);
@@ -578,7 +655,7 @@ function($scope, $http, $routeParams){
         var zoom = canvas.getZoom();
 
         if(type === "in") {
-            // set the zoom limit
+            // set the zoom limit, do nothing
             if(canvas.getZoom() > 2) {
                 return;
             }
@@ -586,7 +663,7 @@ function($scope, $http, $routeParams){
             zoom += 0.1;
             
         } else if(type === "out") {
-            // set the zoom limit
+            // set the zoom limit, do nothing
             if (canvas.getZoom() < 0.4) { 
                 return;
             }
@@ -596,6 +673,11 @@ function($scope, $http, $routeParams){
         canvas.setZoom(zoom);
         canvas.setHeight($scope.state.h * canvas.getZoom());
         canvas.setWidth($scope.state.w * canvas.getZoom());
+
+        $scope.state.zoomNumber =  canvas.getZoom().toFixed(1);
+        console.log(canvas.getZoom().toFixed(1));
+
+        // $scope.$apply();
 
     }
 
@@ -647,10 +729,31 @@ function($scope, $http, $routeParams){
                     opacity: element.opacity,
                     zIndex: element.zIndex,
                     scaleX: element.scaleX,
-                    scaleY: element.scaleY
+                    scaleY: element.scaleY,
+                    // for crop
+                    cropWidth: element.cropWidth,
+                    cropHeight: element.cropHeight,
+                    cropScaleX: element.cropScaleX,
+                    cropScaleY: element.cropScaleY,
+                    cropLeft: element.cropLeft,
+                    cropTop: element.cropTop,
+
+                    clipTo: function (ctx) {
+
+                        console.log("cropping image");
+                        ctx.rect(
+                            -(element.cropWidth/2) + element.cropLeft,
+                            -(element.cropHeight/2) + element.cropTop, 
+                            parseInt(element.cropWidth * element.cropScaleX), 
+                            parseInt(element.cropScaleY * element.cropHeight)
+                        );
+                    
+                        
+                    }
                 });
+
                 canvas.add(image);
-                // canvas.moveTo(image, element.zIndex);
+
                 canvas.moveTo(image, element.zIndex);
                 break;
         }
@@ -660,20 +763,24 @@ function($scope, $http, $routeParams){
     $scope.paintCanvas = function(layers) {
         var canvas = $scope.state.canvas;
         for(var i=0; i < layers.length; i++) {
+            console.log("painting element", layers[i] );
             $scope.paintElement(canvas, layers[i]);
         }
     }
 
-    $scope.paintClipArtPreview = function(canvas) {
-        var width = canvas.getWidth();
-        var height = canvas.getHeight();
-        var image = object._element;
-        var key = 0;
-        var clipArt = $scope.state.clipArt;
+    $scope.paintClipArtPreview = function(object) {
 
-        for(key; key < clipArt.length; key++) {
-            var preview = document.getElementById(key+"ClipArt");
-        }
+        console.log(object);
+        setTimeout(function(){
+            console.log(document.getElementById("hello.Canvas"));
+
+            console.log(object.name+"ClipArt");
+            var canvas = document.getElementById("square.pngClipArt"); 
+            console.log(canvas);
+            console.log(document);
+        }, 2000);
+        
+
     }
 
 
@@ -681,52 +788,53 @@ function($scope, $http, $routeParams){
     // Paint the layers in controller section.
     $scope.paintLayers = function() {
         var canvas = $scope.state.canvas;
-        // var layers = $scope.state.layers;
         var layers = canvas._objects;
         if(!layers) return;
 
 
         // layers.forEach(function(element, index) {
-
-
-        //     // Layers: from layers option in html
-        //     console.log("painting layer:", element, index);
-            
+        //     // index+"Layer" are id of canvas layer priview
         //     var layerCanvas = new fabric.StaticCanvas(index+"Layer");
 
+        //     // isWidthGreater -1 false, 0 equal, 1 true
         //     var isWidthGreater;
         //     var aspectRatio = canvas.getWidth() / canvas.getHeight();
 
-        //     canvas.getWidth() > canvas.getHeight()
-        //     ? isWidthGreater = true
-        //     : isWidthGreater = false;
-        //     console.log("aspectRatio", aspectRatio);
+        //     // canvas.getWidth() > canvas.getHeight()
+        //     // ? isWidthGreater = 1
+        //     // : isWidthGreater = -1;
+
+        //     if(canvas.getWidth() === canvas.getHeight()) {
+        //         isWidthGreater = 0;
+        //     } else if (Number(canvas.getWidth()) > Number(canvas.getHeight())) {
+        //         isWidthGreater = 1;
+        //     } else {
+        //         isWidthGreater = -1;
+        //     }
+
             
         //     c = document.getElementById(index+"Layer");
 
         //     // Set up the correct ratio for the layers display
-        //     if (isWidthGreater) {
+        //     if (isWidthGreater === 0) {
+        //         layerCanvas.set('height', 100);
+        //         layerCanvas.set('width', 100);
+        //         layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth() );
+        //     }
+        //     else if (isWidthGreater === 1){
+        //         layerCanvas.set('width', 130);
+        //         var zoom = layerCanvas.getWidth() / canvas.getWidth();
+        //         layerCanvas.set('height', 130 / aspectRatio);
+        //         layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth() );
+        //     } else {
         //         layerCanvas.set('height', 100);
         //         layerCanvas.set('width', 100 * aspectRatio);
-        //         // c.height = 100;
-        //         // c.width = 100 * aspectRatio;
-        //     } else {
-        //         layerCanvas.set('width', 130);
-        //         layerCanvas.set('height', 130 / aspectRatio);
-        //         // c.width = 130;
-        //         // c.height = 130 / aspectRatio;
+        //         layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth());   
         //     }
-
-        //     layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth() );
             
         //     $scope.paintElement(layerCanvas, element);
         //     layerCanvas.backgroundColor="white";
         //     layerCanvas.renderAll();
-
-        //     // canvas.setZoom(zoom);
-        //     // canvas.setHeight($scope.state.h * canvas.getZoom());
-        //     // canvas.setWidth($scope.state.w * canvas.getZoom());
-                
 
         // });
     }
@@ -765,7 +873,13 @@ function($scope, $http, $routeParams){
         canvas.add(text);
         canvas.centerObject(text);
         canvas.moveTo(text, text.zIndex);
-        $scope.state.historyLayers = [];
+
+        $scope.clearBranch($scope.state.historyLayers, $scope.state.historyIndex);
+        // creator: flag to know which object was the first to be painted for undo to remove it.
+        $scope.state.historyLayers.push(Object.assign({type: text.type, id: text.id, creator: true}, text));
+
+        console.log($scope.state.historyLayers);
+        $scope.state.historyIndex++;
         $scope.paintLayers();
 
         // $scope.setDefaultValues();
@@ -801,11 +915,23 @@ function($scope, $http, $routeParams){
                 canvas.add(imgInstance);
                 canvas.centerObject(imgInstance);
                 canvas.moveTo(imgInstance, imgInstance.zIndex);
-                console.log($scope.state.layers);
 
-                $scope.state.historyLayers = [];
+                canvas.setActiveObject(imgInstance);
+                var object = canvas.getActiveObject();
+
+                object.cropWidth = image.width;
+                object.cropHeight = image.height;
+                object.cropScaleX = 100;
+                object.cropScaleY = 100;
+                object.cropLeft = 0;
+                object.cropTop = 0;
+
+                $scope.clearBranch($scope.state.historyLayers, $scope.state.historyIndex);
+                // creator: flag to know which object was the first to be painted for undo to remove it.
+                $scope.state.historyLayers.push(Object.assign({type: imgInstance.type, id: imgInstance.id, creator: true}, imgInstance));
+
+                $scope.state.historyIndex++;
                 $scope.paintLayers();
-            
             };
             image.src = fr.result;
         }
@@ -814,25 +940,38 @@ function($scope, $http, $routeParams){
 
 
     $scope.addClipArtHandler = function(image) {
-        console.log("adding clip art");
-        console.log(image);
         var canvas = $scope.state.canvas;
-                $scope.state.zIndex++;
-                $scope.state.idHelper++;
-                // store image into layers.
-                var imgInstance = new fabric.Image(image, 
-                    {
-                        id: $scope.state.idHelper,
-                        // Create own z-index property for object
-                        zIndex: $scope.state.zIndex
-                    }
-                );
-                console.log("Image instance is : ",imgInstance);
-                canvas.add(imgInstance);
-                canvas.centerObject(imgInstance);
-                canvas.moveTo(imgInstance, imgInstance.zIndex);
+        $scope.state.zIndex++;
+        $scope.state.idHelper++;
+        // store image into layers.
+        var imgInstance = new fabric.Image(image, 
+            {
+                id: $scope.state.idHelper,
+                // Create own z-index property for object
+                zIndex: $scope.state.zIndex,
+            }
+        );
+        canvas.add(imgInstance);
+        canvas.centerObject(imgInstance);
+        canvas.moveTo(imgInstance, imgInstance.zIndex);
+        
+        canvas.setActiveObject(imgInstance);
+        var object = canvas.getActiveObject();
 
-                $scope.paintLayers();
+        object.cropWidth = image.width;
+        object.cropHeight = image.height;
+        object.cropScaleX = 100;
+        object.cropScaleY = 100;
+        object.cropLeft = 0;
+        object.cropTop = 0;
+
+        $scope.clearBranch($scope.state.historyLayers, $scope.state.historyIndex);
+        // creator: flag to know which object was the first to be painted for undo to remove it.
+        $scope.state.historyLayers.push(Object.assign({type: imgInstance.type, id: imgInstance.id, creator: true}, imgInstance));
+
+        console.log($scope.state.historyLayers);
+        $scope.state.historyIndex++;
+        $scope.paintLayers();
     }
 
 
@@ -909,20 +1048,49 @@ function($scope, $http, $routeParams){
         $scope.state.isActiveObject = canvas.getActiveObject();
         $scope.updateZIndex(canvas.getActiveObject());
         
+        $scope.clearBranch($scope.state.historyLayers, $scope.state.historyIndex);
 
-        // For some reason when cloning object type and maybe other properties are not saved. Add them..
-        $scope.state.historyLayers.push(Object.assign({type: canvas.getActiveObject().type, id: canvas.getActiveObject().id}, canvas.getActiveObject()));
+        if($scope.state.historyPrev != canvas.getActiveObject().id) {
+            console.log("history previous not same add extra");
+            $scope.state.historyLayers.push(Object.assign({type: canvas.getActiveObject().type, id: canvas.getActiveObject().id, creator: false, undoDisplay: false}, canvas.getActiveObject()));
+            $scope.state.historyIndex++;
+        } 
 
+      
+        
         $scope.$apply();
     }
+    
 
     $scope.mouseUp = function(event) {
         var canvas = $scope.state.canvas;
         if(!canvas.getActiveObject()) return;
+        // when starting new manipulation add extra object on history when mouse up fo rundo ?
+        console.log($scope.state.historyPrev, canvas.getActiveObject().id);
+
+
+
+
+        // if($scope.state.historyPrev != canvas.getActiveObject().id) {
+            console.log("history previous not same add extra");
+            $scope.state.historyLayers.push(Object.assign({type: canvas.getActiveObject().type, id: canvas.getActiveObject().id, creator: false, undoDisplay: true}, canvas.getActiveObject()));
+            $scope.state.historyIndex++;
+        // }
+        console.log($scope.state.historyLayers);
         $scope.paintLayers();
+        $scope.state.historyPrev = canvas.getActiveObject().id;
+        
         
 
-        console.log($scope.state.historyLayers);
+    }
+
+    $scope.clearBranch = function(array ,branchIndex){
+        
+        if(branchIndex === -1) return;
+        console.log("The array before clear Branch is ",array);
+        // plus to account for offset
+        array.splice(branchIndex + 1);
+        console.log("The new array after clear Branch is ",array);
     }
 
     $scope.undo = function() {
@@ -930,29 +1098,69 @@ function($scope, $http, $routeParams){
         var history = $scope.state.historyLayers;
 
         if(history.length <= 0) return;
+        
+        console.log($scope.state.historyIndex);
 
-        var redoItem = history.pop();
+        var undo = history[$scope.state.historyIndex];
+        console.log(undo);
+        $scope.state.historyIndex--;
+        var paintUndo = history[$scope.state.historyIndex];
 
         canvas._objects.forEach(function(object, index){
-            if(object.id === redoItem.id) {
+            // clean the canvas by deleting existing object on canvas before painting
+            if(((object.id === undo.id) && (undo.undoDisplay == true))) {
+                console.log("removing object.id == undo.id");
+                canvas.remove(object);
+            } 
+            // if the object we are about to paint exist in canvas remove to avoid duplicates
+            if(paintUndo.id == object.id) {
+                console.log("removing paintUndo.id == object.id", paintUndo.id, object.id);
                 canvas.remove(object);
             }
-            
         });
 
-        console.log(redoItem);
-
-
-        $scope.paintElement(canvas, redoItem);
+        if(undo.creator == true) {
+            console.log("removing undo.creator", undo);
+            canvas.remove(undo);
+            console.log(canvas._objects);
+        }
 
         
-        // $scope.renderAll();
-        // canvas.remove(canvas.getActiveObject());
-        // console.log(redoItem);
 
+        console.log("painting undo index of", $scope.state.historyIndex);
+        // $scope.paintElement(canvas, history[$scope.state.historyIndex]);
+        $scope.paintElement(canvas, paintUndo);
+
+        
         console.log($scope.state.historyLayers);
     }
-   
+
+    $scope.redo = function(){
+        var canvas = $scope.state.canvas;
+        var history = $scope.state.historyLayers;
+        console.log($scope.state.historyIndex);
+        if($scope.state.historyIndex > history.length ) return;
+
+        // current state: delete current state undo
+        var curState = history[$scope.state.historyIndex];
+        $scope.state.historyIndex++;
+        // redo state: paint the redo state.
+        var redo = history[$scope.state.historyIndex];
+
+        canvas._objects.forEach(function(object, index){
+            if((object.id === curState.id) && (object.id === redo.id)) {
+                canvas.remove(object);
+            }
+        });
+
+        console.log(redo);
+
+        $scope.paintElement(canvas, redo);
+        
+        
+        console.log($scope.state.historyLayers);
+    }
+    
     // Set the canvas mouse listeners to our handlers.
     $scope.setCanvasListeners = function() {
         var canvas = $scope.state.canvas;
@@ -989,6 +1197,110 @@ function($scope, $http, $routeParams){
     }
 
 
+    $scope.hotKeys = function(e) {
+        var canvas = $scope.state.canvas;
+        var activeObject = canvas.getActiveObject();
+
+        if (e.keyCode == 37 && activeObject) {
+            console.log("arrow key left");
+            activeObject.left-=1;
+        } else if (e.keyCode == 38 && activeObject) {
+            console.log("arrow key up");
+            activeObject.top-=1;
+        } else if (e.keyCode == 39 && activeObject) {
+            console.log("arrow key right");
+            activeObject.left+=1;
+        } else if (e.keyCode == 40 && activeObject) {
+            console.log("arrow key down");
+            activeObject.top+=1;
+        } else if (e.ctrlKey && e.keyCode == 90) {
+            //control + z aka undo
+            console.log("undo");
+            $scope.undo();
+        } else if (e.ctrlKey && e.keyCode == 89){
+            // control + y aka redo
+            console.log("redo");
+            $scope.redo();
+        } else if (e.ctrlKey && e.keyCode == 83){
+            console.log("saving");
+            $scope.uploadCanvas(canvas);
+        }
+            
+        $scope.renderAll();
+    }
+
+
+    $scope.cropMode = function() {
+        var canvas = $scope.state.canvas;
+        var object = canvas.getActiveObject();
+
+        //checks if an object is selected
+        if(object) {
+            //Green Rectangle for cropping
+            var cropBox = new fabric.Rect
+            ({
+                fill: 'rgba(0,0,0,0.3)',
+                stroke: '#ccc',
+                strokeDashArray: [2, 2],
+                top: object.top,
+                left: object.left,
+                width: object.width,
+                height: object.height,
+                borderColor: '#36fd00',
+                cornerColor: 'green',
+                hasRotatingPoint: false,
+                lockMovementX: true,
+                lockMovementY: true,
+                angle: object.angle
+            });
+            
+            // //draws green rectangle according to element
+            canvas.add(cropBox);
+            $scope.state.cropBox = cropBox;
+            $scope.state.cropObject = object;
+            canvas.setActiveObject(cropBox);
+        }     
+    }
+
+    $scope.cropElement = function () {
+
+        var canvas = $scope.state.canvas;
+        var cropBox = $scope.state.cropBox;
+        var object = $scope.state.cropObject;
+
+        if(cropBox) {
+            var left = cropBox.left - object.left;
+            var top = cropBox.top - object.top;
+
+            //clipTo function to crop in fabric js
+            //crops the image from the centre point of the object
+            object.clipTo = function (ctx) {
+
+                ctx.rect(
+                    -(cropBox.width/2) + left,
+                    -(cropBox.height/2) + top, 
+                    parseInt(cropBox.width * cropBox.scaleX), 
+                    parseInt(cropBox.scaleY * cropBox.height)
+                );
+
+                object.cropWidth = cropBox.width;
+                object.cropHeight = cropBox.height;
+                object.cropScaleX = cropBox.scaleX;
+                object.cropScaleY = cropBox.scaleY;
+                object.cropTop = top;
+                object.cropLeft = left;
+
+            }
+            
+            $scope.state.cropBox = null;
+            canvas.remove(canvas.getActiveObject());
+            // canvas.renderAll();
+        }
+    }
+
+    document.addEventListener('keyup', $scope.hotKeys, false);
+
+
     $scope.init();
 }]);
 
@@ -1022,7 +1334,8 @@ function($scope){
         // Layers: false,
         Text: true,
         Image: false,
-        "Clip Art": false
+        "Clip Art": false,
+        Edit: false
     };
 
 
@@ -1089,11 +1402,11 @@ function($scope){
     }
 
     $scope.show = function(e) {
-        if (e.ctrlKey && e.keyCode == 83) {
-            console.log(e);
-            document.getElementById('controller').style.display = "block";
-            document.getElementById('layers').style.display = "block";
-        }
+        // if (e.ctrlKey && e.keyCode == 83) {
+        //     console.log(e);
+        //     document.getElementById('controller').style.display = "block";
+        //     document.getElementById('layers').style.display = "block";
+        // }
     }
 
     document.addEventListener('keyup', $scope.show, false);
@@ -1104,8 +1417,9 @@ function($scope){
 
 
 
-editApp.controller('HomeController', ['$scope', '$http',
-function($scope, $http){
+
+editApp.controller('HomeController', ['$scope', '$http', 'service',
+function($scope, $http, service){
     $scope.state = {
         canvasIds: [],
     };
@@ -1139,8 +1453,7 @@ function($scope, $http){
    }
 
 
-    $scope.createBlank = function() 
-    {
+    $scope.createBlank = function() {
         console.log("Create blank");
         var canvasId = document.getElementById("canvasId").value;
         var width = document.getElementById("cbcw").value;
@@ -1159,14 +1472,40 @@ function($scope, $http){
 
     $scope.createBlankWithBackground = function() {
         console.log("Create blank with background");
-        var file = document.getElementById('imgFile');
+        // var file = document.getElementById('imgFile');
 
+
+
+
+        var file = document.getElementById("imgFile").files[0]; 
+        
         if(file.value == '') {
             alert("Please select a background.");
             return;
         }
-        var path = "#!/editor/blankBackground";
-        location.href = path;
+
+        // FileReader to read the image.
+        var fr = new FileReader();
+        // Image to get meta data on image such as size.
+        var image = new Image();
+
+        fr.onload = function(event) {
+            image.onload = function(event) {
+                service.setGlobalBackgroundImage(image);
+                console.log(service.getGlobalBackgroundImage());
+                var canvasId = document.getElementById('blankBackgroundCanvasId').value;
+                console.log("canvas id for blank background", canvasId);
+                var path = "#!/editor/blankBackground/"+canvasId;
+                location.href = path;
+            }
+            image.src = event.target.result;
+        }
+        fr.readAsDataURL(file);  
+
+
+
+       
+        
     }
 
     $scope.browseExisiting = function(canvasId) {
@@ -1186,4 +1525,6 @@ function($scope, $http){
 
     $scope.init();
 }]);
+
+
 

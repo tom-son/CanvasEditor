@@ -56,11 +56,13 @@
                             <h4 class="modal-title">Create Blank Canvas with Background</h4>
                         </div>
                         <div class="modal-body">
+                            <p>Please enter canvas details.</p>
+                            <label for="blankBackgroundCanvasId">Project Name</label> <input id="blankBackgroundCanvasId" type="text" >
                             <input 
                                 type="file"
                                 id="imgFile" 
-                                accept=".png, .jpg, .jpeg" 
-                                onchange="angular.element(this).scope().storeBackground(event)"/>
+                                accept=".png, .jpg, .jpeg" />
+                                <!-- onchange="angular.element(this).scope().storeBackground(event)" -->
                         </div>
                         <div class="modal-footer">
                             <button 
