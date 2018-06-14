@@ -1,7 +1,10 @@
 <!-- <body ng-controller="mainController"> -->
     <body>
         <div class="canvas-container" id="ghost">
-                <canvas id="canvas" class="canvas"></canvas>
+            <!-- <div style="margin: 20px 0px 0px 0px; background-color: black"> -->
+                <canvas id="canvas" class="canvas" ></canvas>
+            <!-- </div> -->
+                
             <div
                 ng-controller="dragController"   
                 id="layers" 
@@ -22,10 +25,6 @@
                         </canvas>
                     </div>
                 </div>
-
-                <div class="edit-options-container">
-                    
-                </div>
             </div>
             
             <div
@@ -43,40 +42,56 @@
                 </button>
     
                 <div 
-                    style="height: 400px; padding: 30px">
+                    style="height: 450px; max-height: 450px; width: 200px; padding: 20px; overflow: auto">
     
     
                     <!-- Text: text options goes here   -->
                     <div ng-show="showControllers.Text">
-                        <div class="row">
+                        <div class="row form-group ">
                             <!-- <input 
                                 type="text" 
                                 ng-model="state.textString"
                                 class="text"
                                 placeholder="Text"> -->
-                                <textarea 
-                                    ng-model="state.textString"
-                                    placeholder="Text here!"
-                                    rows="4" 
-                                    cols="20"></textarea>
+                            <textarea 
+                                class="col-sm-11"
+                                style="margin: 0px 0px 0px 8px"
+                                ng-model="state.textString"
+                                placeholder="Text here!"
+                                rows="4"
+                                cols="20"></textarea>
                         </div>
-                        <div class="row">
-                            <input 
-                                type="number"
-                                ng-model="state.fontSize">
-                        </div>
-                        <div class="row">
-                            <select 
-                                ng-options="font for font in state.fonts" 
-                                ng-init="state.font = state.fonts[0]"
-                                ng-model="state.font" ng-change="getFont()"></select>
-                        </div>
-                        <div class="row">
-                            <input 
-                                type="color"
-                                ng-model="state.fontColor">
-                        </div>
-                        <div class="row">
+                        
+
+                        <h5 class="text-primary">Size</h5>
+                        <input 
+                            class="col-sm-6"
+                            type="number"
+                            ng-model="state.fontSize"><br>
+
+                        <h5 class="text-primary">Font</h5>
+                        <select 
+                            name="singleSelect" 
+                            ng-model="state.font"
+                            ng-change="getFont()">
+                            <option value="">-- Please select --</option>
+                            <option 
+                                ng-repeat="(key, value) in $parent.state.fonts"
+                                
+                                value="{{value}}">{{value}}</option>
+                        </select>
+                        <!-- <br>
+                        <select 
+                            ng-options="font for font in state.fonts" 
+                            ng-init="state.font = state.fonts[0]"
+                            ng-model="state.font" 
+                            ng-change="getFont()"></select> -->
+                        <h5 class="text-primary">Color</h5>
+                        <input 
+                            type="color"
+                            ng-model="state.fontColor">
+
+                        <div class="row" style="margin: 15px 0px 0px 0px">
                             <button 
                                 ng-click="addTextHandler(10, 30)" 
                                 class="btn btn-success">Add Text</button>
@@ -86,17 +101,32 @@
                     <!-- Image: image options goes here  -->
                     <div ng-show="showControllers.Image">
                         <div class="row">
-                            <label title="Add image" style="cursor: pointer;">
-                                <input 
-                                    type="file" 
-                                    id="addImgFile" 
-                                    accept=".png, .jpg, .jpeg"
-                                    style="width: 160px;"/>
+                            <!-- onchange: No binding support for File Upload control -->
+                            <input 
+                                class="hide-file"
+                                type="file" 
+                                id="addImgFile" 
+                                onchange="angular.element(this).scope().fileReturn()"
+                                accept=".png, .jpg, .jpeg"
+                                style="width: 160px;"/>
+
+                            <label 
+                                class="form-group"
+                                style="margin: 28px"
+                                for="addImgFile" 
+                                title="Add image" 
+                                style="cursor: pointer;">
+                                Choose a file
                             </label>
+                            <p 
+                                class="text-primary"
+                                id="fileReturn"
+                                style="text-align: center"></p>
                         </div>
                         <div class="row">
                             <button 
                                 class="btn btn-success" 
+                                style="margin: 38px"
                                 ng-click="addImageHandler()">
                                     Add Image
                             </button>
@@ -109,144 +139,212 @@
                         class="row"
                         ng-repeat="(key, value) in $parent.state.clipArt"
                         ng-click="addClipArtHandler(value.base64)">
-                            <canvas 
+                            <!-- <canvas 
                                 id="{{value.name}}ClipArt"
                                 style="background:white;">
-                            </canvas> 
-                            <br>
-                            {{value.name}}
+                            </canvas>  -->
+                            <button 
+                                style="margin: 5px 15px"
+                                class="form-group button">{{value.name}}</button>
+                            
                     </div>
     
-                    <!-- Edit: image options goes here  -->
+                    <!-- Edit: Edit text and image options goes here  -->
                     <div ng-show="showControllers.Edit">
 
 
-                            <!-- Text: edit options -->
+                        <!-- Text: edit options -->
                         <div 
                             ng-show="state.isActiveObject.type === 'text' ? true : false"
                             class="text-edit-options">
-                            <div class="row">
-                                    <textarea 
-                                        ng-model="state.isActiveObject.text"
-                                        placeholder="Text here!"
-                                        rows="4" 
-                                    cols="20"></textarea>
-                        </div>
-                        <div class="row">
-                            <input 
-                                type="number"
-                                ng-model="state.isActiveObject.fontSize"
-                                ng-change="renderAll()">
-                        </div>
-                        <div class="row">
-                            <select 
-                                ng-options="font for font in state.fonts" 
-                                ng-init="state.font = state.fonts[0]"
-                                ng-model="state.font" 
-                                ng-change="fontChanged()"></select>
-                        </div>
-                        <div class="row">
-                            <input 
-                                type="color" 
-                                value="{{state.isActiveObject.fill}}"
-                                ng-model="state.isActiveObject.fill"
-                                ng-change="renderAll()">
-                        </div>
-                        <div class="row">
-                            opacity: <input type="number" step=".01" min="0" max="1" ng-model="state.isActiveObject.opacity" ng-change="renderAll()">
 
-                            
-                            <!-- <input 
-                                id="scale" 
-                                ng-model="state.isActiveObject.opacity"
-                                type="range"
-                                max="1" 
-                                min="0" 
-                                step=".01"
-                                ng-change="renderAll()"/>                       -->
-                        </div>
+                                <textarea 
+                                    class="margin: 0px 0px 0px -10px"
+                                    ng-model="state.isActiveObject.text"
+                                    placeholder="Text here!"
+                                    rows="4" 
+                                    cols="17"></textarea>
 
-                        <div class="row">
-                            <input 
-                                type="color" 
-                                ng-model="state.isActiveObject.textBackgroundColor"
-                                ng-change="renderAll()">
-                        </div>
+                                <h5 class="text-primary">Size</h5>
+                                <input 
+                                    class="col-sm-6"
+                                    type="number"
+                                    ng-model="state.isActiveObject.fontSize"
+                                    ng-change="renderAll()">
+                                <br>
+                                <h5 class="text-primary">Font</h5>
+                                <select 
+                                    ng-options="font for font in state.fonts" 
+                                    ng-init="state.font = state.fonts[0]"
+                                    ng-model="state.font" 
+                                    ng-change="fontChanged()"></select>
 
-                        <div class="row">
-                            <div class="row">
+                                <h5 class="text-primary">Color</h5>
+                                <input 
+                                    type="color" 
+                                    value="{{state.isActiveObject.fill}}"
+                                    ng-model="state.isActiveObject.fill"
+                                    ng-change="renderAll()">
+
+                                <h5 class="text-primary">Hightlight text</h5>
+                                <input 
+                                    type="color" 
+                                    ng-model="state.isActiveObject.textBackgroundColor"
+                                    ng-change="renderAll()">
+
+                                <h5 class="text-primary">Italic</h5>
+                                <input 
+                                    type="checkbox"
+                                    ng-model="state.italicCheckbox"
+                                    ng-change="addItalic()">
+
+                                <h5 class="text-primary">Underline</h5>
+                                <input 
+                                    type="checkbox"
+                                    ng-model="state.underline"
+                                    ng-change="addUnderline()">
+
+                                <h5 class="text-primary">Line through</h5>
+                                <input 
+                                    type="checkbox"
+                                    ng-model="state.lineThrough"
+                                    ng-change="addLineThrough()">
+
+                                <h5 class="text-primary">Over line</h5>
+                                <input 
+                                    type="checkbox"
+                                    ng-model="state.overLine"
+                                    ng-change="addOverLine()">
+
+                                <h5 class="text-primary">Opacity</h5>
+                                <input 
+                                    type="number" 
+                                    step=".01" 
+                                    min="0" 
+                                    max="1" 
+                                    ng-model="state.isActiveObject.opacity" 
+                                    ng-change="renderAll()">
+                                
+                                <!-- <input 
+                                    id="scale" 
+                                    ng-model="state.isActiveObject.opacity"
+                                    type="range"
+                                    max="1" 
+                                    min="0" 
+                                    step=".01"
+                                    ng-change="renderAll()"/>                       -->
+
+                                <h5 class="text-primary">Text align</h5>
                                 <select 
                                     ng-options="align for align in state.textAlign" 
                                     ng-init="state.align = state.textAlign[0]"
                                     ng-model="state.isActiveObject.textAlign" 
                                     ng-change="renderAll()"></select>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="row">
+
+                                <h5 class="text-primary">Text weight</h5>
                                 <select 
-                                ng-options="weight for weight in state.fontWeight" 
-                                ng-init="state.weight = state.fontWeight[0]"
-                                ng-model="state.isActiveObject.fontWeight" 
-                                ng-change="renderAll()"></select>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="row">
+                                    ng-options="weight for weight in state.fontWeight" 
+                                    ng-init="state.weight = state.fontWeight[0]"
+                                    ng-model="state.isActiveObject.fontWeight" 
+                                    ng-change="renderAll()"></select>
+
+
+                                <h5 class="text-primary">Line height</h5>
                                 <select 
-                                ng-options="height for height in state.lineHeight" 
-                                ng-init="state.height = state.lineHeight[0]"
-                                ng-model="state.isActiveObject.lineHeight" 
-                                ng-change="renderAll()"></select>
-                            </div>
-                        </div>
+                                    ng-options="height for height in state.lineHeight" 
+                                    ng-init="state.height = state.lineHeight[0]"
+                                    ng-model="state.isActiveObject.lineHeight" 
+                                    ng-change="renderAll()"></select>
+                                <br><br>
+
+                                <button 
+                                    class="button"
+                                    title="Flip: Horizontal!"
+                                    ng-click="setImageFlip('horizontal')">Flip H</button>
+                
+                                <button 
+                                    class="button"
+                                    title="Flip: Vertical!"
+                                    ng-click="setImageFlip('vertical')">Flip V</button>
+                                <br> <br>
+                                <button 
+                                    class="button"
+                                    title="Flip: Horizontal!"
+                                    ng-click="deleteLayer()">Delete</button>
+                            
+                                    
+                                <button 
+                                    class="button"
+                                    title="Crop: When an item is clicked!"
+                                    ng-show="state.showCropMode"
+                                    ng-click="cropMode()">Crop Mode</button>
+
+                                <!-- <button 
+                                    class="button"
+                                    title="Crop: When an item is clicked!"
+                                    ng-show="!state.showCropMode"
+                                    ng-click="cropElement()">Crop</button> -->
+
+                            <!-- </div> -->
                         </div>
 
                         <!-- Image: edit options -->
-
+                        <div ng-show="state.isActiveObject == null ? false : true">
                         <div 
                             ng-show="state.isActiveObject.type === 'image' ? true : false"
                             class="text-edit-options">
-                            <div class="row">
-                                opacity: <input type="number" ng-model="state.isActiveObject.opacity" ng-change="renderAll()">
-                            </div>
-                        
-                            
-            
-                            
-                            <br>
-                            
-                            <button 
-                            title="Flip: Horizontal!"
-                            ng-click="setImageFlip('horizontal')">Flip H</button>
-            
-                            <button 
-                            title="Flip: Horizontal!"
-                            ng-click="setImageFlip('vertical')">Flip V</button>
-            
-                        </div>
 
-                        <button 
+                            <h5 class="text-primary">Opacity</h5>
+                            <input 
+                                type="number" 
+                                step=".01" 
+                                min="0" 
+                                max="1" 
+                                ng-model="state.isActiveObject.opacity" 
+                                ng-change="renderAll()">
+                            <br><br>
+                            
+                            <button 
+                                class="button"
+                                title="Flip: Horizontal!"
+                                ng-click="setImageFlip('horizontal')">Flip H</button>
+            
+                            <button 
+                                class="button"
+                                title="Flip: Horizontal!"
+                                ng-click="setImageFlip('vertical')">Flip V</button>
+                            <br><br>
+                            <button 
+                            class="button"
                             title="Flip: Horizontal!"
                             ng-click="deleteLayer()">Delete</button>
-                       
-
+                           
+    
+                            <button 
+                                class="button"
+                                title="Crop: When an item is clicked!"
+                                ng-show="state.showCropMode"
+                                ng-click="cropMode()">Crop Mode</button>
+    
+                            <!-- <button 
+                                class="button"
+                                title="Crop: When an item is clicked!"
+                                ng-show="!state.showCropMode"
+                                ng-click="cropElement()">Crop</button> -->
+    
+            
+                        </div>
+                        </div>
                         <button 
-                        title="Crop: When an item is clicked!"
-                        ng-show="state.showCropMode"
-                        ng-click="cropMode()">Crop Mode</button>
-
-                        <button 
-                            title="Crop: When an item is clicked!"
-                            ng-show="!state.showCropMode"
-                            ng-click="cropElement()">Crop</button>
-
+                                class="button"
+                                title="Crop: When an item is clicked!"
+                                ng-show="!state.showCropMode"
+                                ng-click="cropElement()">Crop</button>
+                        
                        
                     </div>
                 </div>
             </div>
-    
-           
         </div>
     
         
@@ -264,11 +362,11 @@
                <button 
                     ng-click="uploadCanvas(state.canvas)"
                     title="Save"><span class="glyphicon glyphicon-floppy-disk"></span></button>
-               <button
+               <!-- <button
                 ng-click="uploadCanvas(state.canvas)"
                 title="Upload">
                     <span class="glyphicon glyphicon-upload"></span>
-                </button>
+                </button> -->
                <!-- <button title="Download JSON"><span class="glyphicon glyphicon-download-alt"></span></button> -->
                <button 
                     title="Undo" 

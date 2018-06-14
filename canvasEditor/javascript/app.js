@@ -64,8 +64,12 @@ function($scope, $http, $routeParams, service){
         cropObject: null,
         textString: "",
         fontSize: 54,
-        font: "",
+        font: "actor",
         fontColor: "#000",
+        italicCheckbox: false,
+        underline: false, 
+        lineThrough: false,
+        overLine: false,
         // gets fonts from loadFonts()
         fonts: [],
         // keep track of all fonts used in canvas
@@ -298,7 +302,15 @@ function($scope, $http, $routeParams, service){
                             fill: element.fill,
                             zIndex: element.zIndex,
                             scaleX: element.scaleX,
-                            scaleY: element.scaleY
+                            scaleY: element.scaleY,
+                            textBackgroundColor: element.textBackgroundColor,
+                            lineHeight: element.lineHeight,
+                            textAlign: element.textAlign,
+                            fontWeight: element.fontWeight,
+                            fontStyle: element.fontStyle,
+                            underline: element.underline,
+                            linethrough: element.linethrough,
+                            overline: element.overline,
                         },
                         {}
                     ));
@@ -725,6 +737,7 @@ function($scope, $http, $routeParams, service){
                 
                 var text = new fabric.Text(element.text, {
                     id: element.id,
+                    type: element.type,
                     fontFamily: element.fontFamily,
                     left: element.left,
                     top: element.top,
@@ -734,7 +747,17 @@ function($scope, $http, $routeParams, service){
                     fill: element.fill,
                     zIndex: element.zIndex,
                     scaleX: element.scaleX,
-                    scaleY: element.scaleY
+                    scaleY: element.scaleY,
+
+                    textBackgroundColor: element.textBackgroundColor,
+                    lineHeight: element.lineHeight,
+                    textAlign: element.textAlign,
+                    fontWeight: element.fontWeight,
+                    fontStyle: element.fontStyle,
+                    underline: element.underline,
+                    linethrough: element.linethrough,
+                    overline: element.overline,
+                    
                 });
                 canvas.add(text);
                 canvas.moveTo(text, element.zIndex);
@@ -742,6 +765,7 @@ function($scope, $http, $routeParams, service){
             case "image":
                 var image = new fabric.Image(element._element, {
                     id: element.id,
+                    type: element.type,
                     left: element.left,
                     top: element.top,
                     angle: element.angle,
@@ -919,7 +943,36 @@ function($scope, $http, $routeParams, service){
         // $scope.setDefaultValues();
     }
 
-    
+    // Adds or remove italics too text object
+    $scope.addItalic = function() {
+        var canvas = $scope.state.canvas;
+        canvas.getActiveObject().fontStyle = $scope.state.italicCheckbox == true ? 'italic' : 'normal';
+        canvas.renderAll();
+    }
+
+     // Adds or remove italics too text object
+     $scope.addUnderline = function() {
+        var canvas = $scope.state.canvas;
+        canvas.getActiveObject().underline = $scope.state.underline;
+        $scope.paintLayers();
+        canvas.renderAll();
+    }
+
+     // Adds or remove italics too text object
+     $scope.addLineThrough = function() {
+        var canvas = $scope.state.canvas;
+        canvas.getActiveObject().linethrough = $scope.state.lineThrough;
+        $scope.paintLayers();
+        canvas.renderAll();
+    }
+
+     // Adds or remove italics too text object
+     $scope.addOverLine = function() {
+        var canvas = $scope.state.canvas;
+        canvas.getActiveObject().overline = $scope.state.overLine;
+        $scope.paintLayers();
+        canvas.renderAll();
+    }
 
 
 
@@ -1090,8 +1143,16 @@ function($scope, $http, $routeParams, service){
             $scope.state.showCropMode = true;
             $scope.$apply();
         }
+
         // if no object clicked, do nothing
-        if(!canvas.getActiveObject()) return;
+        if(!canvas.getActiveObject()) {
+            
+            $scope.state.isActiveObject = null;
+            console.log($scope.state.isActiveObject)
+            $scope.$apply();
+            return;
+        }
+
         $scope.state.isActiveObject = canvas.getActiveObject();
         $scope.updateZIndex(canvas.getActiveObject());
         
@@ -1178,7 +1239,7 @@ function($scope, $http, $routeParams, service){
         console.log("painting undo index of", $scope.state.historyIndex);
         // $scope.paintElement(canvas, history[$scope.state.historyIndex]);
         $scope.paintElement(canvas, paintUndo);
-
+        $scope.paintLayers();
         
         console.log($scope.state.historyLayers);
     }
@@ -1204,6 +1265,7 @@ function($scope, $http, $routeParams, service){
         console.log(redo);
 
         $scope.paintElement(canvas, redo);
+        $scope.paintLayers();
         
         
         console.log($scope.state.historyLayers);
@@ -1310,6 +1372,7 @@ function($scope, $http, $routeParams, service){
             $scope.state.cropObject = object;
             canvas.setActiveObject(cropBox);
             $scope.state.showCropMode = false;
+            $scope.state.isActiveObject
         }     
     }
 
@@ -1357,12 +1420,21 @@ function($scope, $http, $routeParams, service){
                 object.cropLeft = left;
 
             }
-            
+            $scope.paintLayers();
             $scope.state.cropBox = null;
             canvas.remove(canvas.getActiveObject());
             $scope.state.showCropMode = true;
             // canvas.renderAll();
         }
+    }
+
+    $scope.fileReturn = function() {
+        let p = document.getElementById("fileReturn");
+        let file = document.getElementById("addImgFile").value;
+        // clean file path to display only file name
+        file = file.split(/(\\|\/)/g).pop();
+
+        p.innerHTML = file;
     }
 
     document.addEventListener('keyup', $scope.hotKeys, false);
