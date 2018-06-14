@@ -59,12 +59,13 @@ function($scope, $http, $routeParams, service){
         // Unique number to set zindex for objects
         // always incremented when used
         idHelper: 0,
+        showCropMode: true,
         cropBox: null,
         cropObject: null,
         textString: "",
         fontSize: 54,
         font: "",
-        fontColor: "",
+        fontColor: "#000",
         // gets fonts from loadFonts()
         fonts: [],
         // keep track of all fonts used in canvas
@@ -84,6 +85,8 @@ function($scope, $http, $routeParams, service){
             "normal",
             "bold"
         ],
+        fontStyle: ["normal", "italic"],
+        textDecoration: ["underline", "linethrough", "overline"],
         backgroundImg: null,
         showTools: {
 
@@ -137,10 +140,17 @@ function($scope, $http, $routeParams, service){
                 // set state w & h base on background image zoomHandler needs it!!   <--------
                 console.log($scope.state.canvasId);
                 var globalBackground = service.getGlobalBackgroundImage();
+                
                 canvas.setWidth(globalBackground.width);
                 canvas.setHeight(globalBackground.height);
+
+                $scope.state.w = globalBackground.width;
+                $scope.state.h = globalBackground.height;
+
                 $scope.paintBackgroundImage(globalBackground);
                 $scope.uploadCanvas($scope.state.canvas);
+
+                canvas.renderAll();
                 break;
 
             case "reedit":
@@ -220,8 +230,6 @@ function($scope, $http, $routeParams, service){
 
     $scope.imageToBase64 = function(image) {
         var base64;
-
-        console.log("image from imageToBase64",image);
 
         var ghostCanvas = $scope.state.ghostCanvas;
         var gctx = ghostCanvas.getContext('2d');
@@ -361,6 +369,7 @@ function($scope, $http, $routeParams, service){
         $scope.state.idHelper = data.canvasConfig.idHelper;
         $scope.state.zIndex = data.canvasConfig.zIndex;
         $scope.state.fontsUsed = data.canvasConfig.fontsUsed;
+        $scope.state.layers = data.layers;
 
         // state.w and state.h needed for zoomHandler.
         // Without it zoom won't work especially when
@@ -372,13 +381,15 @@ function($scope, $http, $routeParams, service){
         canvas.setWidth(canvasConfig.cWidth);
         canvas.setHeight(canvasConfig.cHeight);
 
-
-
-        var image = new Image();
-        image.onload = function() {
-            $scope.paintBackgroundImage(image);
+        // if there is a background image paint it
+        if(data.backgroundImage._element) {
+            var image = new Image();
+            image.onload = function() {
+                $scope.paintBackgroundImage(image);
+            }
+            image.src = data.backgroundImage._element;
         }
-        image.src = data.backgroundImage._element;
+            
 
         $scope.addFontsUsed();
 
@@ -407,11 +418,9 @@ function($scope, $http, $routeParams, service){
 
         setTimeout(function() {
             $scope.paintCanvas(layers);
+            $scope.paintLayers();
            
         }, 1000);
-        setTimeout(function() {
-            // $scope.cropObjects(layers);
-        }, 2000);
         
 
         console.log("Loaded canvas with these objects",layers);
@@ -451,10 +460,14 @@ function($scope, $http, $routeParams, service){
     $scope.getCanvas64 = function() {
         var canvas = $scope.state.canvas;
 
+        canvas.setZoom(1);
+        console.log($scope.state.w, $scope.state.h);
+        canvas.setHeight($scope.state.h);
+        canvas.setWidth($scope.state.w);
+        $scope.state.zoomNumber = 1;
+        $scope.renderAll();
         var img = document.createElement('img');
         img.src = canvas.toDataURL('image/png');
-
-        document.body.appendChild(img);
 
 
         return canvas.toDataURL('image/png');
@@ -549,6 +562,7 @@ function($scope, $http, $routeParams, service){
     $scope.addFontsUsed = function() {
         $scope.state.fontsUsed.forEach(function(fontConfig){
             $scope.addFontCss(fontConfig.name, fontConfig.path);
+            $scope.loadAndUse(fontConfig.name);
         });
     }
 
@@ -582,6 +596,12 @@ function($scope, $http, $routeParams, service){
 
 
         var center = canvas.getCenter();
+        console.log("painting the background now", image);
+
+      
+
+        document.body.appendChild(image);
+
         canvas.setBackgroundImage(img,
             canvas.renderAll.bind(canvas), {
                 scaleX:1,
@@ -717,7 +737,6 @@ function($scope, $http, $routeParams, service){
                     scaleY: element.scaleY
                 });
                 canvas.add(text);
-                console.log("The zIndex of this text is", element.zIndex);
                 canvas.moveTo(text, element.zIndex);
                 break;
             case "image":
@@ -739,16 +758,12 @@ function($scope, $http, $routeParams, service){
                     cropTop: element.cropTop,
 
                     clipTo: function (ctx) {
-
-                        console.log("cropping image");
                         ctx.rect(
-                            -(element.cropWidth/2) + element.cropLeft,
-                            -(element.cropHeight/2) + element.cropTop, 
-                            parseInt(element.cropWidth * element.cropScaleX), 
-                            parseInt(element.cropScaleY * element.cropHeight)
+                            element.cropLeft,
+                            element.cropTop, 
+                            element.cropWidth, 
+                            element.cropHeight
                         );
-                    
-                        
                     }
                 });
 
@@ -770,14 +785,8 @@ function($scope, $http, $routeParams, service){
 
     $scope.paintClipArtPreview = function(object) {
 
-        console.log(object);
         setTimeout(function(){
-            console.log(document.getElementById("hello.Canvas"));
-
-            console.log(object.name+"ClipArt");
             var canvas = document.getElementById("square.pngClipArt"); 
-            console.log(canvas);
-            console.log(document);
         }, 2000);
         
 
@@ -789,54 +798,76 @@ function($scope, $http, $routeParams, service){
     $scope.paintLayers = function() {
         var canvas = $scope.state.canvas;
         var layers = canvas._objects;
+
+
+        console.log(layers);
         if(!layers) return;
+        setTimeout(function() {
+            layers.forEach( (function(element, index) {
+                // index+"Layer" are id of canvas layer priview
+                var bottomCanvas = document.getElementById(index+"Layer");
+                var layerCanvas;// = new fabric.StaticCanvas(index+"Layer",{width: 100, height: 100});
+                // set bottom canvas dimension. Canvas dimension grows every
+                // time paintLayer was invoked. (problem occured only on macbook 13inch 
+                // however when plugged into a 1080p screen works fine)
+                // var bottomCanvas = document.getElementById(index+"Layer");
+                
 
+                // isWidthGreater -1 false, 0 equal, 1 true
+                var isWidthGreater;
+                var aspectRatio = canvas.getWidth() / canvas.getHeight();
 
-        // layers.forEach(function(element, index) {
-        //     // index+"Layer" are id of canvas layer priview
-        //     var layerCanvas = new fabric.StaticCanvas(index+"Layer");
+                // canvas.getWidth() > canvas.getHeight()
+                // ? isWidthGreater = 1
+                // : isWidthGreater = -1;
 
-        //     // isWidthGreater -1 false, 0 equal, 1 true
-        //     var isWidthGreater;
-        //     var aspectRatio = canvas.getWidth() / canvas.getHeight();
+                if(canvas.getWidth() === canvas.getHeight()) {
+                    isWidthGreater = 0;
+                } else if (Number(canvas.getWidth()) > Number(canvas.getHeight())) {
+                    isWidthGreater = 1;
+                } else {
+                    isWidthGreater = -1;
+                }
 
-        //     // canvas.getWidth() > canvas.getHeight()
-        //     // ? isWidthGreater = 1
-        //     // : isWidthGreater = -1;
+                
+                c = document.getElementById(index+"Layer");
 
-        //     if(canvas.getWidth() === canvas.getHeight()) {
-        //         isWidthGreater = 0;
-        //     } else if (Number(canvas.getWidth()) > Number(canvas.getHeight())) {
-        //         isWidthGreater = 1;
-        //     } else {
-        //         isWidthGreater = -1;
-        //     }
+                // Set up the correct ratio for the layers display
+                if (isWidthGreater === 0) {
+                    layerCanvas = new fabric.StaticCanvas(index+"Layer",{width: 100, height: 100});
 
-            
-        //     c = document.getElementById(index+"Layer");
+                    layerCanvas.set('height', 100);
+                    layerCanvas.set('width', 100);
+                    bottomCanvas.width = 100;
+                    bottomCanvas.height = 100;
 
-        //     // Set up the correct ratio for the layers display
-        //     if (isWidthGreater === 0) {
-        //         layerCanvas.set('height', 100);
-        //         layerCanvas.set('width', 100);
-        //         layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth() );
-        //     }
-        //     else if (isWidthGreater === 1){
-        //         layerCanvas.set('width', 130);
-        //         var zoom = layerCanvas.getWidth() / canvas.getWidth();
-        //         layerCanvas.set('height', 130 / aspectRatio);
-        //         layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth() );
-        //     } else {
-        //         layerCanvas.set('height', 100);
-        //         layerCanvas.set('width', 100 * aspectRatio);
-        //         layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth());   
-        //     }
-            
-        //     $scope.paintElement(layerCanvas, element);
-        //     layerCanvas.backgroundColor="white";
-        //     layerCanvas.renderAll();
+                    layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth() );
+                } else if (isWidthGreater === 1) {
+                    // var zoom = layerCanvas.getWidth() / canvas.getWidth();
+                    layerCanvas = new fabric.StaticCanvas(index+"Layer",{width: 130, height: 130 / aspectRatio});
+                    layerCanvas.set('width', 130);
+                    layerCanvas.set('height', 130 / aspectRatio);
 
-        // });
+                    bottomCanvas.width = 130;
+                    bottomCanvas.height =  130 / aspectRatio;
+
+                    layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth() );
+                } else {
+                    layerCanvas = new fabric.StaticCanvas(index+"Layer",{width: 100 * aspectRatio, height: 100});
+                    layerCanvas.set('width', 100 * aspectRatio);
+                    layerCanvas.set('height', 100);
+
+                    bottomCanvas.width = 100 * aspectRatio;
+                    bottomCanvas.height = 100;
+                    layerCanvas.setZoom(layerCanvas.getWidth() / canvas.getWidth());   
+                }
+
+                $scope.paintElement(layerCanvas, element);
+                layerCanvas.backgroundColor="white";
+                layerCanvas.renderAll();
+
+            } ) );
+        }, 500);
     }
 
 
@@ -854,6 +885,7 @@ function($scope, $http, $routeParams, service){
 
 
     $scope.addTextHandler = function(xpos, ypos) {
+
         var canvas = $scope.state.canvas;
         // before you use increment to keep each unique
         $scope.state.zIndex++;
@@ -880,6 +912,8 @@ function($scope, $http, $routeParams, service){
 
         console.log($scope.state.historyLayers);
         $scope.state.historyIndex++;
+        // assign state.layers to help update dom for paintLayers() (problem on arises in re-editing)
+        $scope.state.layers = canvas._objects;
         $scope.paintLayers();
 
         // $scope.setDefaultValues();
@@ -921,16 +955,18 @@ function($scope, $http, $routeParams, service){
 
                 object.cropWidth = image.width;
                 object.cropHeight = image.height;
-                object.cropScaleX = 100;
-                object.cropScaleY = 100;
-                object.cropLeft = 0;
-                object.cropTop = 0;
+                object.cropScaleX = 1;
+                object.cropScaleY = 1;
+                object.cropLeft = -image.width/2;
+                object.cropTop = -image.height/2;
 
                 $scope.clearBranch($scope.state.historyLayers, $scope.state.historyIndex);
                 // creator: flag to know which object was the first to be painted for undo to remove it.
                 $scope.state.historyLayers.push(Object.assign({type: imgInstance.type, id: imgInstance.id, creator: true}, imgInstance));
 
                 $scope.state.historyIndex++;
+                // assign state.layers to help update dom for paintLayers() (problem on arises in re-editing)
+                $scope.state.layers = canvas._objects;
                 $scope.paintLayers();
             };
             image.src = fr.result;
@@ -954,16 +990,17 @@ function($scope, $http, $routeParams, service){
         canvas.add(imgInstance);
         canvas.centerObject(imgInstance);
         canvas.moveTo(imgInstance, imgInstance.zIndex);
-        
+
+
         canvas.setActiveObject(imgInstance);
         var object = canvas.getActiveObject();
 
         object.cropWidth = image.width;
         object.cropHeight = image.height;
-        object.cropScaleX = 100;
-        object.cropScaleY = 100;
-        object.cropLeft = 0;
-        object.cropTop = 0;
+        object.cropScaleX = 1;
+        object.cropScaleY = 1;
+        object.cropLeft = -image.width/2;
+        object.cropTop = -image.height/2;
 
         $scope.clearBranch($scope.state.historyLayers, $scope.state.historyIndex);
         // creator: flag to know which object was the first to be painted for undo to remove it.
@@ -971,7 +1008,10 @@ function($scope, $http, $routeParams, service){
 
         console.log($scope.state.historyLayers);
         $scope.state.historyIndex++;
+        // assign state.layers to help update dom for paintLayers() (problem on arises in re-editing)
+        $scope.state.layers = canvas._objects;
         $scope.paintLayers();
+
     }
 
 
@@ -1043,6 +1083,13 @@ function($scope, $http, $routeParams, service){
 
     $scope.mouseDown = function(event) {
         var canvas = $scope.state.canvas;
+        
+        console.log(canvas.getActiveObject(), $scope.state.cropBox);
+        if(!canvas.getActiveObject() && $scope.state.cropBox) {
+            canvas.remove($scope.state.cropBox);
+            $scope.state.showCropMode = true;
+            $scope.$apply();
+        }
         // if no object clicked, do nothing
         if(!canvas.getActiveObject()) return;
         $scope.state.isActiveObject = canvas.getActiveObject();
@@ -1056,6 +1103,7 @@ function($scope, $http, $routeParams, service){
             $scope.state.historyIndex++;
         } 
 
+        
       
         
         $scope.$apply();
@@ -1244,8 +1292,10 @@ function($scope, $http, $routeParams, service){
                 strokeDashArray: [2, 2],
                 top: object.top,
                 left: object.left,
-                width: object.width,
-                height: object.height,
+                width: object.width * object.scaleX,
+                height: object.height * object.scaleY,
+                // scaleX: object.scaleX,
+                // scaleY: object.scaleY,
                 borderColor: '#36fd00',
                 cornerColor: 'green',
                 hasRotatingPoint: false,
@@ -1259,6 +1309,7 @@ function($scope, $http, $routeParams, service){
             $scope.state.cropBox = cropBox;
             $scope.state.cropObject = object;
             canvas.setActiveObject(cropBox);
+            $scope.state.showCropMode = false;
         }     
     }
 
@@ -1272,19 +1323,34 @@ function($scope, $http, $routeParams, service){
             var left = cropBox.left - object.left;
             var top = cropBox.top - object.top;
 
-            //clipTo function to crop in fabric js
-            //crops the image from the centre point of the object
-            object.clipTo = function (ctx) {
+            // left *= 1 / object.scaleX;
+            // top *= 1 / object.scaleY;
 
+            left = -(cropBox.width/2) + left,
+            top = -(cropBox.height/2) + top
+
+            var width = cropBox.width * cropBox.scaleX;
+            var height = cropBox.height * cropBox.scaleY;
+
+            //clipTo function to crop in fabric js
+            //clipTo crops from the centre point of the object
+            object.clipTo = function (ctx) {
                 ctx.rect(
-                    -(cropBox.width/2) + left,
-                    -(cropBox.height/2) + top, 
-                    parseInt(cropBox.width * cropBox.scaleX), 
-                    parseInt(cropBox.scaleY * cropBox.height)
+                    // -(cropBox.width/2) + left,
+                    // -(cropBox.height/2) + top, 
+                    left,
+                    top,
+                    // parseInt(cropBox.width * cropBox.scaleX), 
+                    // parseInt(cropBox.height * cropBox.scaleY)
+                    width,
+                    height
                 );
 
-                object.cropWidth = cropBox.width;
-                object.cropHeight = cropBox.height;
+                // object.cropWidth = cropBox.width;
+                // object.cropHeight = cropBox.height;
+                object.cropWidth = width;
+                object.cropHeight = height;
+
                 object.cropScaleX = cropBox.scaleX;
                 object.cropScaleY = cropBox.scaleY;
                 object.cropTop = top;
@@ -1294,6 +1360,7 @@ function($scope, $http, $routeParams, service){
             
             $scope.state.cropBox = null;
             canvas.remove(canvas.getActiveObject());
+            $scope.state.showCropMode = true;
             // canvas.renderAll();
         }
     }
@@ -1450,7 +1517,7 @@ function($scope, $http, service){
                 console.log("failed!", response);
             }
         )
-   }
+    }
 
 
     $scope.createBlank = function() {
